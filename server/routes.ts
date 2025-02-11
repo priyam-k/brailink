@@ -3,12 +3,19 @@ import { createServer } from "http";
 import { storage } from "./storage";
 import { insertDocumentSchema } from "@shared/schema";
 import multer from "multer";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const upload = multer({
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB limit
   }
 });
+
+if (!process.env.GEMINI_API_KEY) {
+  throw new Error("GEMINI_API_KEY is required");
+}
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 export function registerRoutes(app: Express) {
   app.post("/api/ocr", upload.single("image"), async (req, res) => {
@@ -17,16 +24,36 @@ export function registerRoutes(app: Express) {
         return res.status(400).json({ message: "No image file provided" });
       }
 
-      // Mock Gemini API call - in production this would call the actual API
-      const mockOcrText = "Sample OCR text from image";
-      
+      // Convert image buffer to base64
+      const base64Image = req.file.buffer.toString('base64');
+
+      // Initialize Gemini Vision model
+      const model = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
+
+      // Create image part for the model
+      const imagePart = {
+        inlineData: {
+          data: base64Image,
+          mimeType: req.file.mimetype
+        }
+      };
+
+      // Generate content from image
+      const result = await model.generateContent([
+        "Please transcribe any handwritten text in this image. Return only the transcribed text without any additional commentary.",
+        imagePart
+      ]);
+      const response = await result.response;
+      const transcribedText = response.text();
+
       const doc = await storage.createDocument({
-        sourceText: mockOcrText,
-        editedText: mockOcrText,
+        sourceText: transcribedText,
+        editedText: transcribedText,
       });
 
       res.json(doc);
     } catch (error) {
+      console.error('OCR Error:', error);
       res.status(500).json({ message: "Failed to process image" });
     }
   });
