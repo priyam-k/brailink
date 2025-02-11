@@ -24,23 +24,22 @@ export function registerRoutes(app: Express) {
         return res.status(400).json({ message: "No image file provided" });
       }
 
-      // Convert image buffer to base64 data URL
-      const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+      // Convert image buffer to base64
+      const base64Image = req.file.buffer.toString('base64');
 
-      // Initialize Gemini Vision model - using the latest version
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro-vision" });
+      // Initialize Gemini Vision model
+      const model = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
 
-      // Create content parts array for the model
       const prompt = "Please transcribe any handwritten text in this image. Return only the transcribed text without any additional commentary.";
 
       console.log('Sending request to Gemini API with image type:', req.file.mimetype);
 
-      // Generate content from image
+      // Generate content from image using the correct format
       const result = await model.generateContent([
         prompt,
         {
           inlineData: {
-            data: base64Image.split(',')[1], // Remove the data URL prefix
+            data: base64Image,
             mimeType: req.file.mimetype
           }
         }
