@@ -37,12 +37,12 @@ export function registerRoutes(app: Express) {
 
       // Generate content from image
       const result = await model.generateContent([
+        prompt,
         {
-          role: "user",
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: req.file.mimetype, data: base64Image } }
-          ]
+          inlineData: {
+            data: base64Image.split(',')[1], // Remove the data URL prefix
+            mimeType: req.file.mimetype
+          }
         }
       ]);
 
