@@ -17,6 +17,35 @@ if (!process.env.GEMINI_API_KEY) {
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+// Helper function to implement exponential backoff
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  initialDelay: number = 1000
+): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+
+      // Only retry on 503 errors
+      if (error.status !== 503) {
+        throw error;
+      }
+
+      // Calculate delay with exponential backoff
+      const delay = initialDelay * Math.pow(2, attempt);
+      console.log(`Attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  throw lastError;
+}
+
 export function registerRoutes(app: Express) {
   app.post("/api/ocr", upload.single("image"), async (req, res) => {
     try {
@@ -34,16 +63,18 @@ export function registerRoutes(app: Express) {
 
       console.log('Sending request to Gemini API with image type:', req.file.mimetype);
 
-      // Generate content from image using the correct format
-      const result = await model.generateContent([
-        prompt,
-        {
-          inlineData: {
-            data: base64Image,
-            mimeType: req.file.mimetype
+      // Generate content from image using the correct format with retry mechanism
+      const result = await withRetry(async () => {
+        return await model.generateContent([
+          prompt,
+          {
+            inlineData: {
+              data: base64Image,
+              mimeType: req.file.mimetype
+            }
           }
-        }
-      ]);
+        ]);
+      });
 
       const response = await result.response;
       const transcribedText = response.text();
