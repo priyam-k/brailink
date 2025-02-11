@@ -27,8 +27,8 @@ export function registerRoutes(app: Express) {
       // Convert image buffer to base64
       const base64Image = req.file.buffer.toString('base64');
 
-      // Initialize Gemini Vision model
-      const model = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
+      // Initialize Gemini Vision model with the new flash model
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
       const prompt = "Please transcribe any handwritten text in this image. Return only the transcribed text without any additional commentary.";
 
