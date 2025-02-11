@@ -33,6 +33,8 @@ export function registerRoutes(app: Express) {
       // Create content parts array for the model
       const prompt = "Please transcribe any handwritten text in this image. Return only the transcribed text without any additional commentary.";
 
+      console.log('Sending request to Gemini API with image type:', req.file.mimetype);
+
       // Generate content from image
       const result = await model.generateContent([
         {
@@ -47,6 +49,8 @@ export function registerRoutes(app: Express) {
       const response = await result.response;
       const transcribedText = response.text();
 
+      console.log('Gemini API Response:', transcribedText);
+
       const doc = await storage.createDocument({
         sourceText: transcribedText,
         editedText: transcribedText,
@@ -55,7 +59,8 @@ export function registerRoutes(app: Express) {
       res.json(doc);
     } catch (error) {
       console.error('OCR Error:', error);
-      res.status(500).json({ message: "Failed to process image" });
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process image';
+      res.status(500).json({ message: errorMessage });
     }
   });
 
