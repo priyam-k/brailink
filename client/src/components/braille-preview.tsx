@@ -13,7 +13,7 @@ export default function BraillePreview({ text }: Props) {
 
   return (
     <div className="space-y-4">
-      <Card className="p-6 min-h-[100px] font-mono text-xl leading-relaxed">
+      <Card className="p-6 min-h-[100px] max-h-[300px] font-mono text-xl leading-relaxed overflow-auto whitespace-pre-wrap break-words">
         {brailleText || "Braille preview will appear here"}
       </Card>
 

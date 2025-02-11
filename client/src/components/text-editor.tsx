@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -42,16 +42,21 @@ export default function TextEditor({ document, onUpdate }: Props) {
     },
   });
 
+  const handleTextChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newText = e.target.value;
+    mutate(newText);
+  }, [mutate]);
+
   return (
     <div className="space-y-4">
       <Textarea
         value={document?.editedText || ""}
-        onChange={(e) => mutate(e.target.value)}
+        onChange={handleTextChange}
         placeholder="Upload an image or start typing..."
         className="min-h-[200px]"
         disabled={isPending}
       />
-      
+
       <div className="flex justify-end">
         <Button
           variant="outline"
