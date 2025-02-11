@@ -24,25 +24,26 @@ export function registerRoutes(app: Express) {
         return res.status(400).json({ message: "No image file provided" });
       }
 
-      // Convert image buffer to base64
-      const base64Image = req.file.buffer.toString('base64');
+      // Convert image buffer to base64 data URL
+      const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
 
-      // Initialize Gemini Vision model
-      const model = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
+      // Initialize Gemini Vision model - using the latest version
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro-vision" });
 
-      // Create image part for the model
-      const imagePart = {
-        inlineData: {
-          data: base64Image,
-          mimeType: req.file.mimetype
-        }
-      };
+      // Create content parts array for the model
+      const prompt = "Please transcribe any handwritten text in this image. Return only the transcribed text without any additional commentary.";
 
       // Generate content from image
       const result = await model.generateContent([
-        "Please transcribe any handwritten text in this image. Return only the transcribed text without any additional commentary.",
-        imagePart
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: req.file.mimetype, data: base64Image } }
+          ]
+        }
       ]);
+
       const response = await result.response;
       const transcribedText = response.text();
 
