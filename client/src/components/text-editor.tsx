@@ -16,7 +16,16 @@ export default function TextEditor({ document, onUpdate }: Props) {
 
   const { mutate, isPending } = useMutation({
     mutationFn: async (text: string) => {
-      if (!document) throw new Error("No document loaded");
+      if (!document) {
+        // If no document exists, create a new one
+        const res = await fetch('/api/documents', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ editedText: text, sourceText: text }),
+        });
+        if (!res.ok) throw new Error('Failed to create document');
+        return res.json();
+      }
 
       const res = await fetch(`/api/documents/${document.id}`, {
         method: "PATCH",
@@ -69,7 +78,7 @@ useEffect(() => {
         onChange={handleTextChange}
         placeholder="Upload an image or start typing..."
         className="min-h-[200px]"
-        disabled={isPending}
+        
       />
 
       <div className="flex justify-end">
