@@ -1,4 +1,5 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import debounce from "lodash/debounce";
 import { useMutation } from "@tanstack/react-query";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -42,15 +43,29 @@ export default function TextEditor({ document, onUpdate }: Props) {
     },
   });
 
-  const handleTextChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newText = e.target.value;
-    mutate(newText);
-  }, [mutate]);
+  const [localText, setLocalText] = useState(document?.editedText || "");
+
+const debouncedMutate = useCallback(
+  debounce((text: string) => {
+    mutate(text);
+  }, 1000),
+  [mutate]
+);
+
+const handleTextChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const newText = e.target.value;
+  setLocalText(newText);
+  debouncedMutate(newText);
+}, [debouncedMutate]);
+
+useEffect(() => {
+  setLocalText(document?.editedText || "");
+}, [document?.editedText]);
 
   return (
     <div className="space-y-4">
       <Textarea
-        value={document?.editedText || ""}
+        value={localText}
         onChange={handleTextChange}
         placeholder="Upload an image or start typing..."
         className="min-h-[200px]"
