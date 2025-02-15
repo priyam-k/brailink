@@ -11,11 +11,8 @@ const upload = multer({
   }
 });
 
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error("GEMINI_API_KEY is required");
-}
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const GEMINI_API_KEY = "AIzaSyBfp1Vi-Ujxqn_c2Xonm_pbZUBEW-itpJY";
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 // Helper function to implement exponential backoff
 async function withRetry<T>(
