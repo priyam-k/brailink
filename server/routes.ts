@@ -3,94 +3,132 @@ import { createServer } from "http";
 import { storage } from "./storage";
 import { insertDocumentSchema } from "@shared/schema";
 import multer from "multer";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI } from "@google/generative-ai"; // For OCR
+import fs from "fs";
+import OpenAI from "openai";
+import ffmpeg from "fluent-ffmpeg";
+
+// Explicitly set the path to the ffmpeg binary
+ffmpeg.setFfmpegPath("/opt/homebrew/bin/ffmpeg");
 
 const upload = multer({
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-  }
+    fileSize: 5 * 1024 * 1024, // 5MB limit for uploads
+  },
 });
 
-const GEMINI_API_KEY = "AIzaSyBfp1Vi-Ujxqn_c2Xonm_pbZUBEW-itpJY";
+// GEMINI_API_KEY and genAI are used for the /api/ocr endpoint
+const GEMINI_API_KEY = "AIzaSyBfp1Vi-Ujxqn_c2Xonm_pbZUBEW-itpJY"; // Replace with your actual key or use environment variables
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
-// Helper function to implement exponential backoff
-async function withRetry<T>(
-  operation: () => Promise<T>,
-  maxRetries: number = 3,
-  initialDelay: number = 1000
-): Promise<T> {
-  let lastError: Error | null = null;
-
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      return await operation();
-    } catch (error: any) {
-      lastError = error;
-
-      // Only retry on 503 errors
-      if (error.status !== 503) {
-        throw error;
-      }
-
-      // Calculate delay with exponential backoff
-      const delay = initialDelay * Math.pow(2, attempt);
-      console.log(`Attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-
-  throw lastError;
-}
+// Initialize OpenAI client for audio transcription
+const openai = new OpenAI({
+  apiKey: "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", // Replace with your actual OpenAI API key
+});
 
 export function registerRoutes(app: Express) {
+  // OCR Endpoint (using Gemini) - Remains unchanged
   app.post("/api/ocr", upload.single("image"), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No image file provided" });
       }
-
-      // Convert image buffer to base64
-      const base64Image = req.file.buffer.toString('base64');
-
-      // Initialize Gemini Vision model with the new flash model
+      const base64Image = req.file.buffer.toString("base64");
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-      const prompt = "Please transcribe any handwritten text in this image. Return only the transcribed text without any additional commentary.";
-
-      console.log('Sending request to Gemini API with image type:', req.file.mimetype);
-
-      // Generate content from image using the correct format with retry mechanism
-      const result = await withRetry(async () => {
-        return await model.generateContent([
-          prompt,
-          {
-            inlineData: {
-              data: base64Image,
-              mimeType: req.file.mimetype
-            }
-          }
-        ]);
-      });
-
+      const prompt =
+        "Please transcribe any handwritten text in this image. Return only the transcribed text without any additional commentary.";
+      console.log("Sending request to Gemini API for OCR with image type:", req.file.mimetype);
+      const result = await model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            data: base64Image,
+            mimeType: req.file.mimetype,
+          },
+        },
+      ]);
       const response = await result.response;
       const transcribedText = response.text();
-
-      console.log('Gemini API Response:', transcribedText);
-
+      console.log("Gemini API OCR Response:", transcribedText);
       const doc = await storage.createDocument({
         sourceText: transcribedText,
         editedText: transcribedText,
       });
-
       res.json(doc);
     } catch (error) {
-      console.error('OCR Error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to process image';
-      res.status(500).json({ message: errorMessage });
+      console.error("OCR Error:", error);
+      res.status(500).json({ message: "Failed to process image" });
     }
   });
 
+  // Audio Transcription Endpoint (using OpenAI)
+  app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No audio file provided" });
+    }
+
+    const uploadsDir = './uploads';
+    const tempInputPath = `${uploadsDir}/${req.file.originalname}`; // Original name might be "blob"
+    const tempWavPath = `${uploadsDir}/${Date.now()}_output.wav`; // Ensure .wav extension
+
+    try {
+      console.log("Received audio file for transcription:", req.file.originalname);
+
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+
+      fs.writeFileSync(tempInputPath, req.file.buffer);
+      console.log("Temporary input file saved:", tempInputPath);
+
+      await new Promise<void>((resolve, reject) => {
+        ffmpeg(tempInputPath)
+          .toFormat("wav")
+          .on("end", () => {
+            console.log("Conversion to .wav completed:", tempWavPath);
+            resolve();
+          })
+          .on("error", (err) => {
+            console.error("Error during .wav conversion:", err);
+            reject(err);
+          })
+          .save(tempWavPath);
+      });
+
+      // When response_format is "text", the result is the transcribed string directly.
+      const transcriptionString: string = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(tempWavPath),
+        model: "whisper-1",
+        response_format: "text",
+      });
+
+      console.log("Transcription result (string):", transcriptionString);
+      res.json({ transcript: transcriptionString }); // Send the string directly
+
+    } catch (error) {
+      console.error("Error during transcription process:", error);
+      // Ensure to check the type of error for more specific messages if needed
+      const errorMessage = error instanceof Error ? error.message : "Failed to transcribe audio";
+      let statusCode = 500;
+      // @ts-ignore
+      if (error.status) { // OpenAI errors often have a status property
+        // @ts-ignore
+        statusCode = error.status;
+      }
+      res.status(statusCode).json({ message: "Failed to transcribe audio", error: errorMessage });
+    } finally {
+      if (fs.existsSync(tempInputPath)) {
+        fs.unlinkSync(tempInputPath);
+        console.log("Temporary input file deleted:", tempInputPath);
+      }
+      if (fs.existsSync(tempWavPath)) {
+        fs.unlinkSync(tempWavPath);
+        console.log("Temporary .wav file deleted:", tempWavPath);
+      }
+    }
+  });
+
+  // Document creation endpoint - Remains unchanged
   app.post("/api/documents", async (req, res) => {
     try {
       const data = insertDocumentSchema.parse(req.body);
@@ -101,6 +139,7 @@ export function registerRoutes(app: Express) {
     }
   });
 
+  // Document update endpoint - Remains unchanged
   app.patch("/api/documents/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
@@ -110,6 +149,7 @@ export function registerRoutes(app: Express) {
       }
       res.json(doc);
     } catch (error) {
+      console.error("Failed to update document:", error);
       res.status(500).json({ message: "Failed to update document" });
     }
   });
