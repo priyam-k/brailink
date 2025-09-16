@@ -18,12 +18,12 @@ const upload = multer({
 });
 
 // GEMINI_API_KEY and genAI are used for the /api/ocr endpoint
-const GEMINI_API_KEY = "AIzaSyBfp1Vi-Ujxqn_c2Xonm_pbZUBEW-itpJY"; // Replace with your actual key or use environment variables
+const GEMINI_API_KEY = ""; // Replace with your actual key or use environment variables
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 // Initialize OpenAI client for audio transcription
 const openai = new OpenAI({
-  apiKey: "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", // Replace with your actual OpenAI API key
+  apiKey: "", // Replace with your actual OpenAI API key
 });
 
 export function registerRoutes(app: Express) {
