@@ -1,4 +1,4 @@
-# BrailLink - Braille Printer System
+# BraiLink - Braille Printer System
 
 A comprehensive web application that converts text to Braille and sends it to a physical Braille printer via Raspberry Pi. The system includes OCR capabilities for handwritten text recognition, voice transcription, and real-time Braille preview.
 
